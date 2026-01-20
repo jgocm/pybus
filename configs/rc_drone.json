@@ -1,0 +1,21 @@
+{
+  "instances": [
+    {
+      "name": "px4_bus",
+      "serial_port": "/dev/ttyTHS1",
+      "udp_tx_port": 14551,
+      "protocols": [
+        ["MAVLink", 14551],
+        ["TEST", 14552]
+      ]
+    },
+    {
+      "name": "radio_bus",
+      "serial_port": "/dev/ttyUSB0",
+      "udp_tx_port": 14550,
+      "protocols": [
+        ["MAVLink", 14551]      
+      ]
+    }
+  ]
+}
