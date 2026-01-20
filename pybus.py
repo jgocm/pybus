@@ -4,6 +4,8 @@ import serial
 import socket
 import threading
 import time
+import argparse
+import json
 
 class Protocol:
     name: str
@@ -221,10 +223,50 @@ class pybus:
 
         print(f"[{self.name}] Connections closed.")
 
+def run_from_config(config_path, instance_name):
+    with open(config_path, "r") as f:
+        cfg = json.load(f)
+
+    instance = next(
+        i for i in cfg["instances"]
+        if i.get("name") == instance_name
+    )
+
+    bus = pybus(
+        serial_port=instance.get("serial_port", "/dev/ttyUSB0"),
+        serial_baud=instance.get("serial_baud", 57600),
+        serial_read_size=instance.get("serial_read_size", 4096),
+        udp_rx_ip=instance.get("udp_rx_ip", "127.0.0.1"),
+        udp_tx_ip=instance.get("udp_tx_ip", "127.0.0.1"),
+        udp_tx_port=instance.get("udp_tx_port", 14550),
+        udp_packet_len=instance.get("udp_packet_len", 65535),
+        protocols=instance["protocols"],
+    )
+
+    bus.start()
+    print(f"[pybus] Instance '{instance_name}' running")
+
+    try:
+        while True:
+            time.sleep(1)
+    except KeyboardInterrupt:
+        pass
+    finally:
+        bus.stop()
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--config", required=True)
+    parser.add_argument("--instance", required=True)
+    args = parser.parse_args()
+
+    run_from_config(args.config, args.instance)
+
 # -------------------------------------------------
 # Example standalone usage
 # -------------------------------------------------
-if __name__ == "__main__":
+def standalone_example():
     protocols=[
         ("MAVLink", 14551),
         ("TEST", 14552)
