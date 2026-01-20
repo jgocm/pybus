@@ -85,8 +85,12 @@ class pybus:
         udp_tx_ip="127.0.0.1",
         udp_tx_port=14550,
         udp_packet_len=65535,
-        protocols=None
-    ):
+        protocols=None,
+        name = "pybus"
+    ):  
+        self.name = name
+        print(f"[{self.name}] Starting bridge")
+        
         self.serial_port = serial_port
         self.serial_baud = serial_baud
         self.serial_read_size = serial_read_size
@@ -122,7 +126,7 @@ class pybus:
             try:
                 self.recv()
             except Exception as e:
-                print(f"[pybus] serial_to_udp error: {e}")
+                print(f"[{self.name}] serial_to_udp error: {e}")
                 self.running = False
 
     def _sender(self):
@@ -131,7 +135,7 @@ class pybus:
             try:
                 self.send()
             except Exception as e:
-                print(f"[pybus] udp_to_serial error: {e}")
+                print(f"[{self.name}] udp_to_serial error: {e}")
                 self.running = False
 
     def recv(self):
@@ -155,7 +159,7 @@ class pybus:
 
     def start(self):
         """Start the serial ↔ UDP bridge."""
-        print("[pybus] Starting MAVLink serial ↔ UDP bridge")
+        print(f"[{self.name}] Starting MAVLink serial ↔ UDP bridge")
 
         # ---- Open Serial ----
         try:
@@ -165,7 +169,7 @@ class pybus:
                 timeout=0,
             )
             print(
-                f"[pybus] Serial connected: "
+                f"[{self.name}] Serial connected: "
                 f"{self.serial_port} @ {self.serial_baud}"
             )
         except Exception as e:
@@ -195,16 +199,16 @@ class pybus:
         self.t_udp_to_serial.start()
 
         print(
-            f"[pybus] UDP {self.udp_tx_ip}:{self.udp_tx_port} → serial"
+            f"[{self.name}] UDP {self.udp_tx_ip}:{self.udp_tx_port} → serial"
         )
         for protocol in self.broker.protocols:
             print(
-                f"[pybus] Listening for {protocol.name} on UDP port {protocol.port}"
+                f"[{self.name}] Listening for {protocol.name} on UDP port {protocol.port}"
             )
 
     def stop(self):
         """Stop the bridge and close resources."""
-        print("[pybus] Stopping bridge...")
+        print(f"[{self.name}] Stopping bridge...")
         self.running = False
 
         if self.ser:
@@ -215,7 +219,7 @@ class pybus:
             self.udp_sock.close()
             self.udp_sock = None
 
-        print("[pybus] Connections closed.")
+        print(f"[{self.name}] Connections closed.")
 
 # -------------------------------------------------
 # Example standalone usage
@@ -231,7 +235,7 @@ if __name__ == "__main__":
 
     try:
         bus.start()
-        print("[pybus] Bridge running. Press Ctrl+C to exit.")
+        print(f"[{bus.name}] Bridge running. Press Ctrl+C to exit.")
         while True:
             time.sleep(1)
     except KeyboardInterrupt:
