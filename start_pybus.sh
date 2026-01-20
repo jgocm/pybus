@@ -25,3 +25,21 @@ jq -r '.instances[].name' "$CONFIG" | while read -r NAME; do
 done
 
 echo "All pybus instances started."
+
+echo
+echo "Verifying running pybus instances..."
+echo "------------------------------------------------------------"
+
+sleep 1
+
+jq -r '.instances[].name' "$CONFIG" | while read -r NAME; do
+  PID=$(pgrep -f "pybus.py.*--instance $NAME")
+
+  if [ -n "$PID" ]; then
+    echo "✔ Instance '$NAME' is running (PID: $PID)"
+  else
+    echo "✘ Instance '$NAME' is NOT running"
+  fi
+done
+
+echo "------------------------------------------------------------"
