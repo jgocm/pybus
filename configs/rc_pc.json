@@ -1,0 +1,12 @@
+{
+  "instances": [
+    {
+      "name": "radio_bus",
+      "serial_port": "/dev/ttyUSB0",
+      "udp_tx_port": 14550,
+      "protocols": [
+        ["MAVLink", 14551]      
+      ]
+    }
+  ]
+}
