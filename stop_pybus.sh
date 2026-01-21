@@ -1,6 +1,9 @@
 #!/bin/bash
 
-echo "Searching for running pybus instances..."
+#!/bin/bash
+set -e
+
+echo "[pybus] Searching for running pybus instances..."
 echo
 
 # Find matching processes (exclude grep itself)

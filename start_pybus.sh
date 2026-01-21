@@ -1,6 +1,6 @@
 #!/bin/bash
 
-CONFIG="configs/rc_drone.json"
+CONFIG="configs/rc_pc.json"
 PYTHON="python3"
 PYBUS_SCRIPT="pybus.py"
 
