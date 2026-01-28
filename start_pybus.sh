@@ -16,10 +16,9 @@ mkdir -p logs
 jq -r '.instances[].name' "$CONFIG" | while read -r NAME; do
   echo "Starting pybus instance: $NAME"
 
-  nohup $PYTHON $PYBUS_SCRIPT \
+  $PYTHON $PYBUS_SCRIPT \
     --config "$CONFIG" \
-    --instance "$NAME" \
-    > "logs/$NAME.log" 2>&1 &
+    --instance "$NAME" &
 
   echo "  -> PID $!"
 done
@@ -30,7 +29,7 @@ echo
 echo "Verifying running pybus instances..."
 echo "------------------------------------------------------------"
 
-sleep 1
+sleep 5
 
 jq -r '.instances[].name' "$CONFIG" | while read -r NAME; do
   PID=$(pgrep -f "pybus.py.*--instance $NAME")

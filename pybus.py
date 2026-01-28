@@ -6,17 +6,73 @@ import threading
 import time
 import argparse
 import json
+import logging
+import sys
+from logging.handlers import RotatingFileHandler
+
+
+# -------------------------------------------------
+# Logging setup
+# -------------------------------------------------
+
+def setup_logger(name: str, log_file: str | None = None):
+    logger = logging.getLogger(name)
+    logger.setLevel(logging.INFO)
+
+    if logger.handlers:
+        return logger
+
+    formatter = logging.Formatter(
+        "%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+        "%Y-%m-%d %H:%M:%S",
+    )
+
+    # IMPORTANT: disable propagation
+    logger.propagate = False
+
+    # File logging
+    if log_file:
+        file_handler = RotatingFileHandler(
+            log_file,
+            maxBytes=5_000_000,
+            backupCount=3,
+        )
+        file_handler.setFormatter(formatter)
+        logger.addHandler(file_handler)
+    else:
+        # Console only if NOT redirecting stdout
+        console = logging.StreamHandler(sys.stdout)
+        console.setFormatter(formatter)
+        logger.addHandler(console)
+
+    return logger
+
+class StreamToLogger:
+    def __init__(self, logger, level):
+        self.logger = logger
+        self.level = level
+
+    def write(self, message):
+        message = message.strip()
+        if message:
+            self.logger.log(self.level, message)
+
+    def flush(self):
+        pass
+
+# -------------------------------------------------
+# Protocols
+# -------------------------------------------------
 
 class Protocol:
     name: str
-    def __init__(
-            self,
-            port: int = 14550
-    ):
+
+    def __init__(self, port: int = 14550):
         self.port = port
-    
+
     def check(self, data):
         pass
+
 
 class ProtocolFactory:
     _registry = {}
@@ -32,50 +88,43 @@ class ProtocolFactory:
             raise ValueError(f"Unknown protocol: {name}")
         return cls._registry[key](port)
 
+
 class MAVLink(Protocol):
     name = "MAVLink"
-    def __init__(
-            self,
-            port: int
-    ):
-        super().__init__(port)
-    
+
     def check(self, data):
-        # TODO: implement MAVLINK message check
-        # MAVLink messages start with 0xFE or 0xFD
+        # TODO: implement MAVLink message check
         return True
-    
-# Register MAVLink protocol
+
+
 ProtocolFactory.register(MAVLink.name, MAVLink)
+
 
 class TEST(Protocol):
     name = "TEST"
-    def __init__(
-            self,
-            port: int
-    ):
-        super().__init__(port)
-    
+
     def check(self, data):
-        # TODO: implement TEST message check
         return True
 
-# Register TEST protocol
+
 ProtocolFactory.register(TEST.name, TEST)
 
+
+# -------------------------------------------------
+# Broker
+# -------------------------------------------------
+
 class Broker:
-    def __init__(
-            self,
-            protocols: list
-        ):
+    def __init__(self, protocols: list):
         self.protocols = protocols
-    
+
     def check_protocols(self, data) -> list:
-        valid_protocols = []
-        for protocol in self.protocols:
-            if protocol.check(data):
-                valid_protocols.append(protocol)
-        return valid_protocols
+        return [p for p in self.protocols if p.check(data)]
+
+
+# -------------------------------------------------
+# pybus
+# -------------------------------------------------
 
 class pybus:
     def __init__(
@@ -88,11 +137,14 @@ class pybus:
         udp_tx_port=14550,
         udp_packet_len=65535,
         protocols=None,
-        name = "pybus"
-    ):  
+        name="pybus",
+        log_file=None,
+    ):
         self.name = name
-        print(f"[{self.name}] Starting bridge")
-        
+        self.logger = setup_logger(name, log_file)
+
+        self.logger.info("Initializing bridge")
+
         self.serial_port = serial_port
         self.serial_baud = serial_baud
         self.serial_read_size = serial_read_size
@@ -109,35 +161,29 @@ class pybus:
         self.t_serial_to_udp = None
         self.t_udp_to_serial = None
 
-        # ---- Build protocols dynamically ----
         if not protocols:
             raise ValueError("At least one protocol must be provided")
 
-        protocol_objs = [
-            ProtocolFactory.create(name, port)
-            for name, port in protocols
-        ]
-
-        self.broker = Broker(protocol_objs)
+        self.broker = Broker(
+            [ProtocolFactory.create(name, port) for name, port in protocols]
+        )
 
     # -------------------------------------------------
 
     def _receiver(self):
-        """Forward bytes from serial to UDP."""
         while self.running:
             try:
                 self.recv()
-            except Exception as e:
-                print(f"[{self.name}] serial_to_udp error: {e}")
+            except Exception:
+                self.logger.exception("serial → UDP thread crashed")
                 self.running = False
 
     def _sender(self):
-        """Forward bytes from UDP to serial."""
         while self.running:
             try:
                 self.send()
-            except Exception as e:
-                print(f"[{self.name}] udp_to_serial error: {e}")
+            except Exception:
+                self.logger.exception("UDP → serial thread crashed")
                 self.running = False
 
     def recv(self):
@@ -145,51 +191,45 @@ class pybus:
         if not data:
             return
 
-        valid_protocols = self.broker.check_protocols(data)
-        if len(valid_protocols)==0:
-            return  # silently drop unknown frames
-        
-        for protocol in valid_protocols:
+        for protocol in self.broker.check_protocols(data):
             self.udp_sock.sendto(data, (self.udp_rx_ip, protocol.port))
-    
+
     def send(self):
         data, _ = self.udp_sock.recvfrom(self.udp_max_packet_len)
         if data:
             self.ser.write(data)
-        
+
     # -------------------------------------------------
 
     def start(self):
-        """Start the serial ↔ UDP bridge."""
-        print(f"[{self.name}] Starting MAVLink serial ↔ UDP bridge")
+        self.logger.info("Starting serial ↔ UDP bridge")
 
-        # ---- Open Serial ----
         try:
             self.ser = serial.Serial(
                 port=self.serial_port,
                 baudrate=self.serial_baud,
                 timeout=0,
             )
-            print(
-                f"[{self.name}] Serial connected: "
-                f"{self.serial_port} @ {self.serial_baud}"
+            self.logger.info(
+                "Serial connected: %s @ %d",
+                self.serial_port,
+                self.serial_baud,
             )
-        except Exception as e:
-            raise RuntimeError(f"Failed to open serial port: {e}")
+        except Exception:
+            self.logger.exception("Failed to open serial port")
+            raise
 
-        # ---- Open UDP ----
         try:
             self.udp_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
             self.udp_sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
             self.udp_sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
             self.udp_sock.bind((self.udp_tx_ip, self.udp_tx_port))
-        except Exception as e:
+        except Exception:
+            self.logger.exception("Failed to open UDP socket")
             self.ser.close()
-            raise RuntimeError(f"Failed to open UDP socket: {e}")
+            raise
 
         self.running = True
-
-        # ---- Threads ----
         self.t_serial_to_udp = threading.Thread(
             target=self._receiver, daemon=True
         )
@@ -200,17 +240,21 @@ class pybus:
         self.t_serial_to_udp.start()
         self.t_udp_to_serial.start()
 
-        print(
-            f"[{self.name}] UDP {self.udp_tx_ip}:{self.udp_tx_port} → serial"
+        self.logger.info(
+            "UDP %s:%d → serial",
+            self.udp_tx_ip,
+            self.udp_tx_port,
         )
+
         for protocol in self.broker.protocols:
-            print(
-                f"[{self.name}] Listening for {protocol.name} on UDP port {protocol.port}"
+            self.logger.info(
+                "Listening for %s on UDP port %d",
+                protocol.name,
+                protocol.port,
             )
 
     def stop(self):
-        """Stop the bridge and close resources."""
-        print(f"[{self.name}] Stopping bridge...")
+        self.logger.info("Stopping bridge")
         self.running = False
 
         if self.ser:
@@ -221,9 +265,23 @@ class pybus:
             self.udp_sock.close()
             self.udp_sock = None
 
-        print(f"[{self.name}] Connections closed.")
+        self.logger.info("Connections closed")
+
+
+# -------------------------------------------------
+# Runner from JSON config
+# -------------------------------------------------
 
 def run_from_config(config_path, instance_name):
+    log_file = f"logs/{instance_name}.log"
+
+    # Root logger (captures everything)
+    root_logger = setup_logger("pybus", log_file)
+
+    # Redirect stdout / stderr
+    sys.stdout = StreamToLogger(root_logger, logging.INFO)
+    sys.stderr = StreamToLogger(root_logger, logging.ERROR)
+
     with open(config_path, "r") as f:
         cfg = json.load(f)
 
@@ -241,10 +299,12 @@ def run_from_config(config_path, instance_name):
         udp_tx_port=instance.get("udp_tx_port", 14550),
         udp_packet_len=instance.get("udp_packet_len", 65535),
         protocols=instance["protocols"],
+        name=instance_name,
+        log_file=log_file,
     )
 
     bus.start()
-    print(f"[pybus] Instance '{instance_name}' running")
+    bus.logger.info("Instance running")
 
     try:
         while True:
@@ -254,6 +314,10 @@ def run_from_config(config_path, instance_name):
     finally:
         bus.stop()
 
+
+# -------------------------------------------------
+# Main
+# -------------------------------------------------
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -262,25 +326,3 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     run_from_config(args.config, args.instance)
-
-# -------------------------------------------------
-# Example standalone usage
-# -------------------------------------------------
-def standalone_example():
-    protocols=[
-        ("MAVLink", 14551),
-        ("TEST", 14552)
-        ]
-    
-    #bus = pybus(serial_port='/dev/ttyTHS1', udp_tx_port=14551, protocols=protocols) # PX4 port
-    bus = pybus(serial_port='/dev/ttyUSB0', udp_tx_port=14550, protocols=protocols)
-
-    try:
-        bus.start()
-        print(f"[{bus.name}] Bridge running. Press Ctrl+C to exit.")
-        while True:
-            time.sleep(1)
-    except KeyboardInterrupt:
-        pass
-    finally:
-        bus.stop()
