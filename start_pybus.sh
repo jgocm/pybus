@@ -1,8 +1,18 @@
 #!/bin/bash
 
-CONFIG="configs/rc_pc.json"
+if [ $# -ne 1 ]; then
+  echo "Usage: $0 <config.json>"
+  exit 1
+fi
+
+CONFIG="$1"
 PYTHON="python3"
 PYBUS_SCRIPT="pybus.py"
+
+if [ ! -f "$CONFIG" ]; then
+  echo "Config file not found: $CONFIG"
+  exit 1
+fi
 
 # Require jq
 if ! command -v jq &> /dev/null; then
