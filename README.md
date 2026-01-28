@@ -54,13 +54,28 @@ TODO:
 - make an option to have log files in a given directory
 
 ### Running as systemd service
+This repo provides a script to install pybus as a systemd service. It uses templated services and creates instances that correspond to each instance of a given config file. The installation can be executed with:
+```
+sudo ./install_service.sh <path-to-config-file>
+```
 
+This script will:
+- Update config and pybus.py service's files
+- Create a .service template file
+- Remove obsolete pybus service instances
+- Enable pybus instances from the names given in the config file
+- Reload systemd
+- If ran with "-s" flag at the end, it will also start the services: `sudo ./install_service.sh <path-to-config-file> -s`
 
-## Limit log file size for systemd
+The services' logs can be checked in the journalctl with:
+```
+journalctl -u pybus@<instance-name> -f
+```
+
+### Limit log file size for systemd
 
 Edit journald config:
 `sudo nano /etc/systemd/journald.conf`
-
 
 Uncomment or add these lines:
 ```
