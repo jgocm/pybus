@@ -47,21 +47,20 @@ cat > "$SYSTEMD_FILE" <<EOF
 [Unit]
 Description=pybus serial ↔ UDP bridge
 After=network.target
-Wants=network.target
 
 [Service]
-Type=oneshot
-RemainAfterExit=yes
+Type=simple
+User=root
+WorkingDirectory=/opt/pybus
 
-WorkingDirectory=$INSTALL_DIR
-ExecStart=$INSTALL_DIR/start_pybus.sh
-ExecStop=$INSTALL_DIR/stop_pybus.sh
+ExecStart=/opt/pybus/start_pybus.sh
+ExecStop=/opt/pybus/stop_pybus.sh
 
-User=$SUDO_USER
-Group=$SUDO_USER
+Restart=always
+RestartSec=2
 
-TimeoutStopSec=10
-KillMode=none
+StandardOutput=journal
+StandardError=journal
 
 [Install]
 WantedBy=multi-user.target

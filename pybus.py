@@ -15,7 +15,7 @@ from logging.handlers import RotatingFileHandler
 # Logging setup
 # -------------------------------------------------
 
-def setup_logger(name: str, log_file: str | None = None):
+def setup_logger(name: str):
     logger = logging.getLogger(name)
     logger.setLevel(logging.INFO)
 
@@ -27,25 +27,14 @@ def setup_logger(name: str, log_file: str | None = None):
         "%Y-%m-%d %H:%M:%S",
     )
 
-    # IMPORTANT: disable propagation
+    handler = logging.StreamHandler(sys.stdout)
+    handler.setFormatter(formatter)
+
+    logger.addHandler(handler)
     logger.propagate = False
 
-    # File logging
-    if log_file:
-        file_handler = RotatingFileHandler(
-            log_file,
-            maxBytes=5_000_000,
-            backupCount=3,
-        )
-        file_handler.setFormatter(formatter)
-        logger.addHandler(file_handler)
-    else:
-        # Console only if NOT redirecting stdout
-        console = logging.StreamHandler(sys.stdout)
-        console.setFormatter(formatter)
-        logger.addHandler(console)
-
     return logger
+
 
 class StreamToLogger:
     def __init__(self, logger, level):
@@ -141,7 +130,7 @@ class pybus:
         log_file=None,
     ):
         self.name = name
-        self.logger = setup_logger(name, log_file)
+        self.logger = setup_logger(name)
 
         self.logger.info("Initializing bridge")
 
@@ -276,7 +265,7 @@ def run_from_config(config_path, instance_name):
     log_file = f"logs/{instance_name}.log"
 
     # Root logger (captures everything)
-    root_logger = setup_logger("pybus", log_file)
+    root_logger = setup_logger(instance_name)
 
     # Redirect stdout / stderr
     sys.stdout = StreamToLogger(root_logger, logging.INFO)
