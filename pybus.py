@@ -8,7 +8,6 @@ import argparse
 import json
 import logging
 import sys
-from logging.handlers import RotatingFileHandler
 
 
 # -------------------------------------------------
