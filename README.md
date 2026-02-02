@@ -6,6 +6,17 @@ A python class that implements a bridge between an UDP and a Serial port
 ## Dependencies
 pybus only uses common Python packages, such as: serial, socker, threading, time, argparse, json, sys and logging.
 
+```
+pip install pyserial
+```
+
+Some devices might need to be configured to give permission to scripts to access serial ports:
+```
+sudo usermod -a -G dialout $USER
+```
+
+Reboot or logout for this change to take effect.
+
 ## Configs
 pybus requires a configuration file such as the ones provided in the configs folder. It must be filled with your list of desired pybus instances that should be executed, where instance contains the following arguments:
 - name: a name/label for the given instance
