@@ -17,6 +17,11 @@ sudo usermod -a -G dialout $USER
 
 Reboot or logout for this change to take effect.
 
+The bash scripts for startup and systemd installation also use jq to open json file.
+```
+sudo apt install jq
+```
+
 ## Configs
 pybus requires a configuration file such as the ones provided in the configs folder. It must be filled with your list of desired pybus instances that should be executed, where instance contains the following arguments:
 - name: a name/label for the given instance
