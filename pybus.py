@@ -8,6 +8,7 @@ import argparse
 import json
 import logging
 import sys
+from pymavlink import mavutil
 
 
 # -------------------------------------------------
@@ -79,10 +80,26 @@ class ProtocolFactory:
 
 class MAVLink(Protocol):
     name = "MAVLink"
+    mav = mavutil.mavlink.MAVLink(None)
 
-    def check(self, data):
-        # TODO: implement MAVLink message check
+    def check(self, data: bytes) -> bool:
+        self.is_mavlink_message(data)
         return True
+
+    def is_mavlink_message(self, data: bytes) -> bool:
+        """
+        Check if incoming bytes contain a valid MAVLink message.
+        Returns True if a MAVLink frame is detected.
+        """
+        for b in data:
+            msg = self.mav.parse_char(bytes([b]))
+            if msg:
+                return True
+
+        return False
+    
+    def is_not_radio_status(self, msg) -> bool:
+        return msg.get_type() != "RADIO_STATUS"
 
 
 ProtocolFactory.register(MAVLink.name, MAVLink)
@@ -184,6 +201,9 @@ class pybus:
 
     def send(self):
         data, _ = self.udp_sock.recvfrom(self.udp_max_packet_len)
+        
+        self.broker.protocols[0].check(data)
+
         if data:
             self.ser.write(data)
 
